@@ -1,0 +1,103 @@
+name: Continuous Integration
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-application:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6.0.3
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.3.0
+        with:
+          python-version: "3.12.10"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check --requirement requirements.txt
+
+      - name: Run application tests
+        run: python -m pytest Tests --verbose
+
+      - name: Build container image
+        run: docker build --tag system-health-api:ci .
+
+      - name: Start container
+        run: docker run --detach --name system-health-api-ci --publish 5000:5000 --env APP_VERSION=ci system-health-api:ci
+
+      - name: Verify container endpoints
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:5000/health | grep --quiet '"status":"healthy"'; then
+              break
+            fi
+            if [ "${attempt}" -eq 30 ]; then
+              docker logs system-health-api-ci
+              exit 1
+            fi
+            sleep 2
+          done
+          curl --fail --silent --show-error http://127.0.0.1:5000/ | grep --quiet '"application":"System Health API"'
+          curl --fail --silent --show-error http://127.0.0.1:5000/system | grep --quiet '"uptime_seconds":'
+          curl --fail --silent --show-error http://127.0.0.1:5000/version | grep --quiet '"version":"ci"'
+
+      - name: Remove test container
+        if: always()
+        run: docker rm --force system-health-api-ci || true
+
+  validate-terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Terraform
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6.0.3
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: "1.16.4"
+          terraform_wrapper: false
+
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive
+
+      - name: Initialize Terraform
+        run: terraform init -backend=false -input=false
+
+      - name: Validate Terraform
+        run: terraform validate -no-color
+
+  validate-kubernetes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6.0.3
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v5.0.0
+        with:
+          version: "v1.36.0"
+
+      - name: Render Kubernetes resources
+        run: kubectl kustomize Kubernetes > rendered.yaml
+
+      - name: Validate rendered resources
+        run: |
+          grep --fixed-strings --quiet "namespace: integrated-delivery" rendered.yaml
+          grep --fixed-strings --quiet "containerPort: 5000" rendered.yaml
+          grep --fixed-strings --quiet "path: /health" rendered.yaml
+          grep --fixed-strings --quiet "targetPort: http" rendered.yaml

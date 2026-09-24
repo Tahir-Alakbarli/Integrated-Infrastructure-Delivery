@@ -58,7 +58,7 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           role-session-name: integrated-delivery
           aws-region: ${{ env.AWS_REGION }}
-          mask-aws-account-id: true
+          mask-aws-account-id: false
 
       - name: Log in to Amazon ECR
         id: ecr

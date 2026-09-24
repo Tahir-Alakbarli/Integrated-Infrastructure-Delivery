@@ -1,0 +1,13 @@
+aws_region           = "eu-central-1"
+project_name         = "integrated-delivery"
+cluster_name         = "integrated-delivery-cluster"
+kubernetes_version   = "1.36"
+ecr_repository_name  = "integrated-infrastructure-delivery"
+vpc_cidr             = "10.20.0.0/16"
+public_subnet_cidrs  = ["10.20.1.0/24", "10.20.2.0/24"]
+node_instance_types  = ["t3.medium"]
+node_min_size        = 1
+node_desired_size    = 1
+node_max_size        = 2
+github_owner         = "Tahir-Alakbarli"
+github_repository    = "Integrated-Infrastructure-Delivery"

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: system-health-api
+  namespace: integrated-delivery
+  labels:
+    app.kubernetes.io/name: system-health-api
+    app.kubernetes.io/part-of: integrated-infrastructure-delivery
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: system-health-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
